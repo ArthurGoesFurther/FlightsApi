@@ -23,6 +23,9 @@ public static class DependencyInjection
         services.AddMemoryCache();
         services.AddScoped<ICacheService, MemoryCacheService>();
 
+        // make IConfiguration available for Application handlers via DI
+        services.AddSingleton(configuration);
+
         return services;
     }
 }

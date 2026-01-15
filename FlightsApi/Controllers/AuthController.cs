@@ -1,4 +1,5 @@
 using Application.Features.Auth.GetToken;
+using Application.Features.Auth.RegisterUser;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -30,6 +31,22 @@ public class AuthController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] RegisterUserRequest request)
+    {
+        var command = new RegisterUserCommand(request.Username, request.Password, request.RoleCode);
+        try
+        {
+            var result = await _mediator.Send(command);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }
 
 public record GetTokenRequest(string Username, string Password);
+public record RegisterUserRequest(string Username, string Password, string RoleCode);

@@ -4,6 +4,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Configuration;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
 
 namespace Application.Features.Auth.GetToken;
 
@@ -11,11 +15,13 @@ public class GetTokenQueryHandler : IRequestHandler<GetTokenQuery, GetTokenRespo
 {
     private readonly IDbContext _context;
     private readonly ILogger<GetTokenQueryHandler> _logger;
+    private readonly IConfiguration _configuration;
 
-    public GetTokenQueryHandler(IDbContext context, ILogger<GetTokenQueryHandler> logger)
+    public GetTokenQueryHandler(IDbContext context, ILogger<GetTokenQueryHandler> logger, IConfiguration configuration)
     {
         _context = context;
         _logger = logger;
+        _configuration = configuration;
     }
 
     public async Task<GetTokenResponse?> Handle(GetTokenQuery request, CancellationToken cancellationToken)
@@ -37,11 +43,43 @@ public class GetTokenQueryHandler : IRequestHandler<GetTokenQuery, GetTokenRespo
             return null;
         }
 
-        // Simple token generation (in production use JWT)
-        var token = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user.Username}:{user.RoleId}:{DateTime.UtcNow:O}"));
+        // Generate JWT token
+        var key = _configuration["Jwt:Key"] ?? string.Empty;
+        if (string.IsNullOrEmpty(key))
+        {
+            _logger.LogError("JWT Key is not configured");
+            return null;
+        }
+
+        var issuer = _configuration["Jwt:Issuer"] ?? "FlightsApi";
+        var audience = _configuration["Jwt:Audience"] ?? "FlightsApiClients";
+        var expiryMinutes = int.TryParse(_configuration["Jwt:ExpiryMinutes"], out var m) ? m : 60;
+
+        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
+        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
+        };
+
+        if (!string.IsNullOrEmpty(user.Role?.Code))
+        {
+            claims.Add(new Claim(ClaimTypes.Role, user.Role!.Code));
+        }
+
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
+            signingCredentials: credentials);
+
+        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
         _logger.LogInformation("User {Username} authenticated successfully", request.Username);
-        return new GetTokenResponse(token);
+        return new GetTokenResponse(tokenString);
     }
 
     private static string HashPassword(string password)

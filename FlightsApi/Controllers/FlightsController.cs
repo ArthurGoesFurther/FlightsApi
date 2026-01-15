@@ -4,11 +4,13 @@ using Application.Features.Flights.UpdateFlightStatus;
 using Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace FlightsApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class FlightsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -29,9 +31,9 @@ public class FlightsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Moderator")]
     public async Task<IActionResult> CreateFlight([FromBody] CreateFlightRequest request)
     {
-        // TODO: Add authorization check for Moderator role
         var command = new CreateFlightCommand(
             request.Origin,
             request.Destination,
@@ -44,9 +46,9 @@ public class FlightsController : ControllerBase
     }
 
     [HttpPut("{id}/status")]
+    [Authorize(Roles = "Moderator")]
     public async Task<IActionResult> UpdateFlightStatus(int id, [FromBody] UpdateFlightStatusRequest request)
     {
-        // TODO: Add authorization check for Moderator role
         var command = new UpdateFlightStatusCommand(id, request.Status);
         var flight = await _mediator.Send(command);
 

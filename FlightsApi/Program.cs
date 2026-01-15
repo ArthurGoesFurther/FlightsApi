@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,7 +37,6 @@ builder.Services.AddSwaggerGen(c =>
         Description = "Web API for managing flight statuses"
     });
 
-    // Add Bearer token support in Swagger (UI will allow entering token)
     var securityScheme = new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -42,20 +44,117 @@ builder.Services.AddSwaggerGen(c =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Enter a token received from the /api/auth/token endpoint. This project uses a simple token format for demo purposes."
     };
 
     c.AddSecurityDefinition("Bearer", securityScheme);
+    
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
-            securityScheme, new string[] { }
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
         }
     });
 });
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Add Authentication - JWT
+var jwtKey = builder.Configuration["Jwt:Key"] ?? string.Empty;
+if (string.IsNullOrEmpty(jwtKey))
+{
+    throw new InvalidOperationException("JWT Key is not configured in appsettings.json");
+}
+
+var key = Encoding.UTF8.GetBytes(jwtKey);
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(key),
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        ClockSkew = TimeSpan.Zero
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var loggerFactory = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>();
+            var logger = loggerFactory.CreateLogger("JwtBearerEvents");
+            var path = context.HttpContext.Request.Path;
+
+            // Inspect Authorization header
+            var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+            if (string.IsNullOrEmpty(authHeader))
+            {
+                logger.LogDebug("OnMessageReceived: no Authorization header. Path={Path}", path);
+                return Task.CompletedTask;
+            }
+
+            if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                context.Token = authHeader.Substring("Bearer ".Length).Trim();
+                logger.LogInformation("OnMessageReceived: Authorization header with Bearer found. Path={Path}", path);
+            }
+            else
+            {
+                // Accept raw token without 'Bearer ' prefix (some Swagger setups send raw token)
+                context.Token = authHeader.Trim();
+                logger.LogWarning("OnMessageReceived: Authorization header present but missing 'Bearer ' prefix; using raw token. Path={Path}", path);
+            }
+
+            return Task.CompletedTask;
+        },
+        OnTokenValidated = context =>
+        {
+            var loggerFactory = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>();
+            var logger = loggerFactory.CreateLogger("JwtBearerEvents");
+            var name = context.Principal?.Identity?.Name ?? "<unknown>";
+            logger.LogInformation("Token validated for {Name}", name);
+            return Task.CompletedTask;
+        },
+        OnAuthenticationFailed = context =>
+        {
+            var loggerFactory = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>();
+            var logger = loggerFactory.CreateLogger("JwtBearerEvents");
+            logger.LogError(context.Exception, "JWT authentication failed: {Message}", context.Exception.Message);
+            return Task.CompletedTask;
+        },
+        OnChallenge = context =>
+        {
+            var loggerFactory = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>();
+            var logger = loggerFactory.CreateLogger("JwtBearerEvents");
+            logger.LogWarning("OnChallenge: error={Error}, description={Description}", context.Error, context.ErrorDescription);
+            return Task.CompletedTask;
+        }
+    };
+});
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("ModeratorOnly", policy => policy.RequireRole("Moderator"));
+});
 
 // CORS
 builder.Services.AddCors(options =>
@@ -72,10 +171,17 @@ var app = builder.Build();
 
 // Configure the HTTP request pipeline: enable Swagger UI for all environments
 app.UseSwagger();
-app.UseSwaggerUI();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Flights API v1");
+    c.DisplayRequestDuration();
+    c.EnableDeepLinking();
+    c.EnableFilter();
+});
 
 app.UseSerilogRequestLogging();
 app.UseCors();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
