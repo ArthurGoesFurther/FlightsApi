@@ -1,9 +1,17 @@
-This workspace contains a minimal DDD-structured ASP.NET Core solution skeleton.
+Air Astana test project.
+Arthur Nurgozhayev.
 
-Projects:
-- Domain: domain entities and enums (no EF Core references).
-- Application: sketches and references Domain.
-- Infrastructure: sketches and references Domain.
-- FlightsApi: Presentation (Web API) references Application, Infrastructure, Domain.
+—делано по заданию https://docs.google.com/document/d/1SkWoF7X3z1FJmj_pXJImfSNAG71eoC1GCHgu9TpNU3w/edit?tab=t.0
 
-Next steps: Implement application services, EF Core DbContext in Infrastructure, and controllers in Presentation.
+ћожно было сделать много вещей, чтобы приблизить проект к более реальному виду, но в силу ограниченного времени и объема работы, € решил остановитьс€ на минимально рабочем варианте.
+
+
+ƒл€ авторизации использовал JWT, потому что на собеседовании упом€нули, что у вас микросервисна€ архитектура.
+’еширование паролей сделал на BCrypt.
+
+ƒобавил эндпоинт дл€ регистрации, чтобы было легче тестировать. ѕолитику создани€ на него не накладывал, в проде бы сделал на уровне доступов к машинам.
+Swagger рабочий, можно пользоватьс€.
+
+ќстальное по “« сделано по минимуму: fluentValidation, MediatR cqrs, MemoryCache, xUnit(был рад оп€ть пописать тесты), подв€зал mssql локально.
+
+ѕо привычке бы еще упаковал в докер, но на собесе сказали, что в этом обычно нет надобности.
