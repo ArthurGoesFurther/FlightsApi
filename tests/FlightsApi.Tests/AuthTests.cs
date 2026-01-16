@@ -2,6 +2,8 @@ using Application.Features.Auth.RegisterUser;
 using Application.Features.Auth.GetToken;
 using Application.Interfaces;
 using Domain.Entities;
+using Infrastructure.Data;
+using Microsoft.Extensions.Configuration;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,13 +14,13 @@ namespace FlightsApi.Tests;
 
 public class AuthTests
 {
-    private static ApplicationDbContext CreateContext()
+    private static Infrastructure.Data.ApplicationDbContext CreateContext()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        var options = new DbContextOptionsBuilder<Infrastructure.Data.ApplicationDbContext>()
             .UseInMemoryDatabase("AuthTestsDb")
             .Options;
 
-        return new ApplicationDbContext(options, null, NullLogger<ApplicationDbContext>.Instance);
+        return new Infrastructure.Data.ApplicationDbContext(options, null, NullLogger<Infrastructure.Data.ApplicationDbContext>.Instance);
     }
 
     [Fact]
@@ -31,7 +33,17 @@ public class AuthTests
         var res = await handler.Handle(cmd, default);
         res.Username.Should().Be("testuser");
 
-        var tokenHandler = new GetTokenQueryHandler(ctx, NullLogger<GetTokenQueryHandler>.Instance, new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection().Build());
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(new System.Collections.Generic.Dictionary<string, string?>
+            {
+                ["Jwt:Key"] = "8eb039104fed22e5549eed5f86cbfa628eb039104xdarthurkrasava",
+                ["Jwt:Issuer"] = "FlightsApi",
+                ["Jwt:Audience"] = "FlightsApiClients",
+                ["Jwt:ExpiryMinutes"] = "60",
+            })
+            .Build();
+
+        var tokenHandler = new GetTokenQueryHandler(ctx, NullLogger<GetTokenQueryHandler>.Instance, config);
         var q = new GetTokenQuery("testuser", "password123");
         var token = await tokenHandler.Handle(q, default);
         token.Should().NotBeNull();

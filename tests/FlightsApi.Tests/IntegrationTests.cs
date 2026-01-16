@@ -8,18 +8,19 @@ using Microsoft.Extensions.Logging.Abstractions;
 using System.Threading.Tasks;
 using Xunit;
 using Infrastructure.Caching;
+using Infrastructure.Data;
 
 namespace FlightsApi.Tests;
 
 public class IntegrationTests
 {
-    private static ApplicationDbContext CreateContext(string name)
+    private static Infrastructure.Data.ApplicationDbContext CreateContext(string name)
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        var options = new DbContextOptionsBuilder<Infrastructure.Data.ApplicationDbContext>()
             .UseInMemoryDatabase(name)
             .Options;
 
-        return new ApplicationDbContext(options, null, NullLogger<ApplicationDbContext>.Instance);
+        return new Infrastructure.Data.ApplicationDbContext(options, null, NullLogger<Infrastructure.Data.ApplicationDbContext>.Instance);
     }
 
     [Fact]
