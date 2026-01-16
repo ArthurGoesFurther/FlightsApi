@@ -67,6 +67,14 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// register IHttpContextAccessor and current user provider for auditing in ApplicationDbContext
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Func<string?>>(provider =>
+{
+    var http = provider.GetService<IHttpContextAccessor>();
+    return () => http?.HttpContext?.User?.Identity?.Name;
+});
+
 // Add Authentication - JWT
 var jwtKey = builder.Configuration["Jwt:Key"] ?? string.Empty;
 if (string.IsNullOrEmpty(jwtKey))
@@ -181,6 +189,8 @@ app.UseSwaggerUI(c =>
 
 app.UseSerilogRequestLogging();
 app.UseCors();
+// Global exception logging middleware (logs exception + user + time)
+app.UseMiddleware<FlightsApi.Middleware.ExceptionLoggingMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

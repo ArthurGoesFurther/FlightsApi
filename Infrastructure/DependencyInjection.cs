@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Infrastructure;
 
@@ -22,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<IDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
         services.AddMemoryCache();
         services.AddScoped<ICacheService, MemoryCacheService>();
+        // Note: registering IHttpContextAccessor and the current user provider is done in the host project (Program.cs)
 
         // make IConfiguration available for Application handlers via DI
         services.AddSingleton(configuration);
