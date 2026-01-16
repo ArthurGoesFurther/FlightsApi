@@ -3,8 +3,7 @@ using Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Security.Cryptography;
-using System.Text;
+using Application.Common;
 
 namespace Application.Features.Auth.RegisterUser;
 
@@ -38,7 +37,7 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, R
             await _context.SaveChangesAsync(cancellationToken);
         }
 
-        var hashed = HashPassword(request.Password);
+        var hashed = PasswordHasher.HashPassword(request.Password);
 
         var user = new User
         {
@@ -55,11 +54,5 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, R
         return new RegisterUserResponse(user.Id, user.Username, role.Code);
     }
 
-    private static string HashPassword(string password)
-    {
-        using var sha256 = SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(password);
-        var hash = sha256.ComputeHash(bytes);
-        return Convert.ToBase64String(hash);
-    }
+    // password hashing moved to PasswordHasher
 }

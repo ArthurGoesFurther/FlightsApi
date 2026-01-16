@@ -36,8 +36,8 @@ public class GetTokenQueryHandler : IRequestHandler<GetTokenQuery, GetTokenRespo
             return null;
         }
 
-        var hashedPassword = HashPassword(request.Password);
-        if (user.Password != hashedPassword)
+        var isValid = Application.Common.PasswordHasher.VerifyHashedPassword(user.Password, request.Password);
+        if (!isValid)
         {
             _logger.LogWarning("Invalid password attempt for user: {Username}", request.Username);
             return null;
@@ -82,11 +82,5 @@ public class GetTokenQueryHandler : IRequestHandler<GetTokenQuery, GetTokenRespo
         return new GetTokenResponse(tokenString);
     }
 
-    private static string HashPassword(string password)
-    {
-        using var sha256 = SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(password);
-        var hash = sha256.ComputeHash(bytes);
-        return Convert.ToBase64String(hash);
-    }
+    // password verification moved to PasswordHasher
 }

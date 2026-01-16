@@ -201,12 +201,22 @@ using (var scope = app.Services.CreateScope())
     var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     try
     {
-        context.Database.EnsureCreated();
-        Log.Information("Database initialized successfully");
+        // Use EF migrations if available; fallback to EnsureCreated for simple local runs
+        context.Database.Migrate();
+        Log.Information("Database migrated successfully");
     }
     catch (Exception ex)
     {
-        Log.Error(ex, "Error initializing database");
+        Log.Error(ex, "Error initializing database (Migrate failed). Attempting EnsureCreated.");
+        try
+        {
+            context.Database.EnsureCreated();
+            Log.Information("Database ensured created successfully");
+        }
+        catch (Exception inner)
+        {
+            Log.Error(inner, "Error ensuring database created");
+        }
     }
 }
 

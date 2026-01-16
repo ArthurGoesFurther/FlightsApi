@@ -7,6 +7,9 @@ namespace Infrastructure.Caching;
 public class MemoryCacheService : ICacheService
 {
     private readonly IMemoryCache _cache;
+    // keep registry of keys to support pattern removal since IMemoryCache doesn't provide it
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _keys =
+        new System.Collections.Concurrent.ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
 
     public MemoryCacheService(IMemoryCache cache)
     {
@@ -38,19 +41,40 @@ public class MemoryCacheService : ICacheService
         }
 
         _cache.Set(key, json, options);
+        _keys.TryAdd(key, 0);
         return Task.CompletedTask;
     }
 
     public Task RemoveAsync(string key, CancellationToken cancellationToken = default)
     {
         _cache.Remove(key);
+        _keys.TryRemove(key, out _);
         return Task.CompletedTask;
     }
 
     public Task RemoveByPatternAsync(string pattern, CancellationToken cancellationToken = default)
     {
-        // MemoryCache doesn't support pattern removal, so we'll just remove the specific key
-        // In production with Redis, this would be implemented properly
+        if (string.IsNullOrEmpty(pattern))
+        {
+            return Task.CompletedTask;
+        }
+
+        // Support simple wildcard pattern ending with '*', e.g. 'flights_*'
+        if (pattern.EndsWith("*", StringComparison.Ordinal))
+        {
+            var prefix = pattern.Substring(0, pattern.Length - 1);
+            var keysToRemove = _keys.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).ToList();
+            foreach (var key in keysToRemove)
+            {
+                _cache.Remove(key);
+                _keys.TryRemove(key, out _);
+            }
+            return Task.CompletedTask;
+        }
+
+        // Exact match
+        _cache.Remove(pattern);
+        _keys.TryRemove(pattern, out _);
         return Task.CompletedTask;
     }
 }
